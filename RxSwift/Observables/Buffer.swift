@@ -69,7 +69,8 @@ final fileprivate class BufferTimeCountSink<Element, O: ObserverType>
     private let _timerD = SerialDisposable()
     private var _buffer = [Element]()
     private var _windowID = 0
-    
+    private var _numberToSkip = 0
+
     init(parent: Parent, observer: O, cancel: Cancelable) {
         _parent = parent
         super.init(observer: observer, cancel: cancel)
@@ -85,7 +86,12 @@ final fileprivate class BufferTimeCountSink<Element, O: ObserverType>
         let windowID = _windowID
         
         let buffer = _buffer
-        _buffer = []
+        if (_parent._count > _parent._skip) {
+            _buffer = Array(buffer.suffix(_parent._count - _parent._skip))
+        } else {
+            _buffer = []
+        }
+        _numberToSkip = _parent._skip - _parent._count
         forwardOn(.next(buffer))
         
         createTimer(windowID)
@@ -98,18 +104,24 @@ final fileprivate class BufferTimeCountSink<Element, O: ObserverType>
     func _synchronized_on(_ event: Event<E>) {
         switch event {
         case .next(let element):
-            _buffer.append(element)
-            
-            if _buffer.count == _parent._count {
-                startNewWindowAndSendCurrentOne()
+            if (_numberToSkip <= 0) {
+                _buffer.append(element)
+
+                if _buffer.count == _parent._count {
+                    startNewWindowAndSendCurrentOne()
+                }
+            } else {
+                _numberToSkip -= 1
             }
-            
         case .error(let error):
             _buffer = []
             forwardOn(.error(error))
             dispose()
         case .completed:
-            forwardOn(.next(_buffer))
+            // Don't emit a partial buffer that was already sent
+            if (_parent._skip == _parent._count) || (_buffer.count > (_parent._count - _parent._skip )) {
+                forwardOn(.next(_buffer))
+            }
             forwardOn(.completed)
             dispose()
         }

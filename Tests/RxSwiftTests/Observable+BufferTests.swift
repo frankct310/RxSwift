@@ -50,7 +50,77 @@ extension ObservableBufferTest {
             Subscription(200, 600)
             ])
     }
-    
+
+    func testBufferWithSkipCountOverlapping_Basic() {
+        let scheduler = TestScheduler(initialClock: 0)
+
+        let xs = scheduler.createHotObservable([
+            next(205, 1),
+            next(210, 2),
+            next(240, 3),
+            next(280, 4),
+            next(320, 5),
+            next(350, 6),
+            next(370, 7),
+            next(420, 8),
+            next(470, 9),
+            completed(600)
+            ])
+
+
+        let res = scheduler.start {
+            xs.buffer(timeSpan: 1000, count: 3, skip: 1, scheduler: scheduler).map { EquatableArray($0) }
+        }
+
+        XCTAssertEqual(res.events, [
+            next(240, EquatableArray([1, 2, 3])),
+            next(280, EquatableArray([2, 3, 4])),
+            next(320, EquatableArray([3, 4, 5])),
+            next(350, EquatableArray([4, 5, 6])),
+            next(370, EquatableArray([5, 6, 7])),
+            next(420, EquatableArray([6, 7, 8])),
+            next(470, EquatableArray([7, 8, 9])),
+            completed(600)
+            ])
+
+        XCTAssertEqual(xs.subscriptions, [
+            Subscription(200, 600)
+            ])
+    }
+
+    func testBufferWithSkipCountGreaterThanCount_Basic() {
+        let scheduler = TestScheduler(initialClock: 0)
+
+        let xs = scheduler.createHotObservable([
+            next(205, 1),
+            next(210, 2),
+            next(240, 3),
+            next(280, 4),
+            next(320, 5),
+            next(350, 6),
+            next(370, 7),
+            next(420, 8),
+            next(470, 9),
+            completed(600)
+            ])
+
+
+        let res = scheduler.start {
+            xs.buffer(timeSpan: 1000, count: 3, skip: 4, scheduler: scheduler).map { EquatableArray($0) }
+        }
+
+        XCTAssertEqual(res.events, [
+            next(240, EquatableArray([1, 2, 3])),
+            next(370, EquatableArray([5, 6, 7])),
+            next(600, EquatableArray([9])),
+            completed(600)
+            ])
+
+        XCTAssertEqual(xs.subscriptions, [
+            Subscription(200, 600)
+            ])
+    }
+
     func testBufferWithTimeOrCount_Error() {
         let scheduler = TestScheduler(initialClock: 0)
         
